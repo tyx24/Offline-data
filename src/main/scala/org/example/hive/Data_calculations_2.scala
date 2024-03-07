@@ -1,4 +1,4 @@
-package org.example
+package org.example.hive
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -6,7 +6,7 @@ import org.apache.spark.sql.SparkSession
 
 import java.util.Properties
 
-object Data_calculations_1 {
+object Data_calculations_2 {
   def main(args: Array[String]): Unit = {
     System.setProperty("HADOOP_USER_NAME", "root")
     //设置日志等级
@@ -28,35 +28,32 @@ object Data_calculations_1 {
     properties.put("password", "123456")
     properties.put("driver", "com.mysql.jdbc.Driver")
 
-
     val dataFrame = sparkSession.sql(
       """
         |select
-        |province.id provinceid,
-        |province.name provincename,
-        |region.id regionid,
-        |region.region_name regionname,
-        |sum(`final_total_amount`) totalconsumption,
-        |count(1) totalorder,
-        |year(order.create_time) year,
-        |month(order.create_time) month
-        |from dwd.fact_order_info order
+        |*,
+        |CASE WHEN (provinceavgconsumption > allprovinceavgconsumption) THEN '高'
+        |     WHEN (provinceavgconsumption < allprovinceavgconsumption) THEN '低'
+        |     ELSE '相同' END AS comparison
+        |from
+        |(select
+        |  province.id provinceid,
+        |  province.name providerincename,
+        | avg(order.final_total_amount) provinceavgconsumption,
+        | AVG(AVG(order.final_total_amount)) OVER () AS allprovinceavgconsumption
+        | from dwd.fact_order_info order
         | join dwd.dim_province province
         | on (order.province_id = province.id
         |      and province.etl_date='20240401')
-        |  join dwd.dim_region region
-        |   on (province.region_id = region.id
-        |       and region.etl_date='20240401'
-        |       and province.etl_date='20240401')
-        | group by province.id,province.name,
-        |         region.id,region.region_name,
-        |         year(order.create_time),
-        |         month(order.create_time)
+        | WHERE year(order.create_time)=2020
+        | and month(order.create_time)=04
+        |  GROUP BY province.id, province.name
+        |  )
         |""".stripMargin)
 
-    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "provinceeverymonth", properties)
+    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "provinceavgcmp", properties)
 
-    sparkSession.read.jdbc(MysqlURL, "provinceeverymonth", properties).show()
+    sparkSession.read.jdbc(MysqlURL, "provinceavgcmp", properties).show()
 
     sparkSession.stop()
   }

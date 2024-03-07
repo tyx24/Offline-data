@@ -1,4 +1,4 @@
-package org.example
+package org.example.hive
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -6,7 +6,7 @@ import org.apache.spark.sql.SparkSession
 
 import java.util.Properties
 
-object Data_calculations_6 {
+object Data_calculations_5 {
   def main(args: Array[String]): Unit = {
 
     System.setProperty("HADOOP_USER_NAME", "root")
@@ -32,33 +32,29 @@ object Data_calculations_6 {
 
     val dataFrame = sparkSession.sql(
       """
-        |select
-        |regionid,
-        |regionname,
-        |concat_ws(",",collect_list(cast(provinceid as STRING))) as provinceids,
-        |concat_ws(",",collect_list(provincename)) as provincenames,
-        |concat_ws(",",collect_list(cast(province_total_amount as STRING))) as provinceamount
+        |SELECT
+        |*,
+        |case
+        | when (provinceavgconsumption>regionavgconsumption) then "高"
+        | when (provinceavgconsumption<regionavgconsumption) then "低"
+        | else "相同" end as `comparison`
         |FROM
-        |(
-        | SELECT
-        | region_id regionid,
-        | region_name regionname,
-        | province_id provinceid,
-        | province_name provincename,
-        | sum(`total_amount`) as `province_total_amount`,
-        | row_number() over (partition by region_id order by sum(`total_amount`) desc) as `num`
+        | (SELECT
+        |   province_id provinceid,
+        |   province_name provincename,
+        |   total_amount/total_count provinceavgconsumption,
+        |   region_id regionid,
+        |   region_name regionname,
+        |   sum(total_amount) over (partition by `year`,`month`,region_id)/
+        |   sum(total_count) over (partition by `year`,`month`,region_id) as regionavgconsumption
         | FROM dws.province_consumption_day_aggr
-        | where year=2020
-        | group by region_id,region_name,
-        |          province_id,province_name
+        | where year=2020 and month=04
         | )
-        | where `num`<=3
-        | group by regionid,regionname
         |""".stripMargin)
 
-    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "regiontopthree", properties)
+    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "provinceavgcmpregion", properties)
 
-    sparkSession.read.jdbc(MysqlURL, "regiontopthree", properties).show()
+    sparkSession.read.jdbc(MysqlURL, "provinceavgcmpregion", properties).show()
 
     sparkSession.stop()
   }

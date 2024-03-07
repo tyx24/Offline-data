@@ -1,9 +1,9 @@
-package org.example
+package org.example.hive
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{col, current_timestamp, date_format, lit, when}
+import org.apache.spark.sql.functions._
 
 object Data_cleansing_5 {
   def main(args: Array[String]): Unit = {

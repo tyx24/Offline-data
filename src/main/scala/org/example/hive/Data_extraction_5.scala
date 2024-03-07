@@ -1,13 +1,12 @@
-package org.example
+package org.example.hive
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{current_timestamp, date_format, lit}
 
 import java.util.Properties
 
-object Data_extraction_4 {
+object Data_extraction_5 {
   def main(args: Array[String]): Unit = {
 
     System.setProperty("HADOOP_USER_NAME", "root")
@@ -17,7 +16,7 @@ object Data_extraction_4 {
     //warehouse
     val warehouse = "hdfs://bigdata1:8020/user/hive/warehouse"
 
-    val Conf = new SparkConf().setMaster("local[*]").setAppName("Data_extraction_4")
+    val Conf = new SparkConf().setMaster("local[*]").setAppName("Data_extraction_5")
 
     val sparkSession = SparkSession.builder().enableHiveSupport().config(Conf)
       .config("spark.sql.warehouse.dir", warehouse)
@@ -30,19 +29,24 @@ object Data_extraction_4 {
     properties.put("user", "root")
     properties.put("password", "123456")
 
-    sparkSession.read.jdbc(jdbcURL, "base_region", properties).withColumn("create_time", lit(date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss").cast("timestamp")))
-      .createTempView("v")
+    sparkSession.read.jdbc(jdbcURL, "order_info", properties).createTempView("v")
 
-    val maxid = sparkSession.sql(
+    val maxtime = sparkSession.sql(
       """
-        |select max(id) from ods.base_region
-        |""".stripMargin).collect()(0).get(0).toString.toInt
+        |from ods.order_info
+        |select case
+        | when operate_time > create_time then operate_time
+        | when operate_time < create_time then create_time
+        | else create_time end as `maxvalue`
+        |order by maxvalue desc
+        |limit 1
+        |""".stripMargin).collect()(0).get(0).toString
 
     sparkSession.sql(
       s"""
-         |insert into table ods.base_region partition(etl_date="20240401")
+         |insert into table ods.order_info partition(etl_date="20240401")
          |select * from v
-         |where id > $maxid
+         |where operate_time > cast('$maxtime' as timestamp) or create_time > cast('$maxtime' as timestamp)
          |""".stripMargin)
 
     sparkSession.stop()

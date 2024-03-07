@@ -1,4 +1,4 @@
-package org.example
+package org.example.hive
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkConf
@@ -6,7 +6,7 @@ import org.apache.spark.sql.SparkSession
 
 import java.util.Properties
 
-object Data_calculations_7 {
+object Data_calculations_6 {
   def main(args: Array[String]): Unit = {
 
     System.setProperty("HADOOP_USER_NAME", "root")
@@ -30,33 +30,35 @@ object Data_calculations_7 {
     properties.put("password", "123456")
     properties.put("driver", "com.mysql.jdbc.Driver")
 
-
     val dataFrame = sparkSession.sql(
       """
         |select
-        |COUNT(DISTINCT user_id) AS purchaseduser,
-        |COUNT(DISTINCT CASE WHEN last_day - day = 1 THEN user_id END) AS repurchaseduser,
-        |CONCAT(
-        |        ROUND(COUNT(DISTINCT CASE WHEN last_day - day = 1 THEN user_id END) / COUNT(DISTINCT user_id) * 100, 1),
-        |        '%'
-        |    ) as repurchaserate
-        | from
-        |(select
-        |*,
-        |lead(`day`) over (partition by user_id order by `day`) as `last_day`
-        |from
-        |(select
-        |user_id,
-        |date_format(fact_order_info.create_time,"yyyyMMdd") as `day`
-        |from
-        |dwd.fact_order_info
-        |)
-        |)
+        |regionid,
+        |regionname,
+        |concat_ws(",",collect_list(cast(provinceid as STRING))) as provinceids,
+        |concat_ws(",",collect_list(provincename)) as provincenames,
+        |concat_ws(",",collect_list(cast(province_total_amount as STRING))) as provinceamount
+        |FROM
+        |(
+        | SELECT
+        | region_id regionid,
+        | region_name regionname,
+        | province_id provinceid,
+        | province_name provincename,
+        | sum(`total_amount`) as `province_total_amount`,
+        | row_number() over (partition by region_id order by sum(`total_amount`) desc) as `num`
+        | FROM dws.province_consumption_day_aggr
+        | where year=2020
+        | group by region_id,region_name,
+        |          province_id,province_name
+        | )
+        | where `num`<=3
+        | group by regionid,regionname
         |""".stripMargin)
 
-    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "userrepurchasedrate", properties)
+    dataFrame.write.mode("overwrite").jdbc(MysqlURL, "regiontopthree", properties)
 
-    sparkSession.read.jdbc(MysqlURL, "userrepurchasedrate", properties).show()
+    sparkSession.read.jdbc(MysqlURL, "regiontopthree", properties).show()
 
     sparkSession.stop()
   }
