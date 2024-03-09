@@ -50,7 +50,6 @@ object Data_extraction_1 {
          |select
          |*
          |from v
-         |where
          |where operate_time > cast('$max_time' as timestamp) or create_time > cast('$max_time' as timestamp)
          |""".stripMargin)
       .withColumn("etl_date", lit("20240401"))
