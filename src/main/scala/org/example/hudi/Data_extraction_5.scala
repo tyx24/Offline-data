@@ -6,11 +6,11 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.config.HoodieWriteConfig._
 
 import java.util.Properties
 
-object Data_extraction_1 {
+object Data_extraction_5 {
   def main(args: Array[String]): Unit = {
     System.setProperty("HADOOP_USER_NAME", "root")
 
@@ -18,7 +18,7 @@ object Data_extraction_1 {
 
     val warehouse = "hdfs://bigdata1:8020/user/hive/warehouse"
 
-    val conf = new SparkConf().setMaster("local[*]").setAppName("Data_extraction_1")
+    val conf = new SparkConf().setMaster("local[*]").setAppName("Data_extraction_5")
 
     val sparkSession = SparkSession.builder().config(conf)
       .config("spark.sql.warehouse.dir", warehouse)
@@ -26,7 +26,7 @@ object Data_extraction_1 {
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate()
 
-    val TableURL = "hdfs://bigdata1:8020/user/hive/warehouse/ods_ds_hudi.db/user_info"
+    val TableURL = "hdfs://bigdata1:8020/user/hive/warehouse/ods_ds_hudi.db/order_info"
 
     val jdbcURL = "jdbc:mysql://bigdata1:3306/shtd_store?useUnicode=true&characterEncoding=UTF-8"
     val properties = new Properties()
@@ -34,8 +34,7 @@ object Data_extraction_1 {
     properties.put("user", "root")
     properties.put("password", "123456")
 
-    sparkSession.read.jdbc(jdbcURL, "user_info", properties)
-      .withColumn("operate_time", when(col("operate_time").isNull, col("create_time")).otherwise(col("operate_time")))
+    sparkSession.read.jdbc(jdbcURL, "order_info", properties)
       .createTempView("v")
 
     sparkSession.read.format("hudi").load(TableURL).createOrReplaceTempView("hudi_table_v")
@@ -55,7 +54,7 @@ object Data_extraction_1 {
       .withColumn("etl_date", lit("20240401"))
       .write.format("hudi")
       .options(getQuickstartWriteConfigs)
-      .option(TBL_NAME.key(), "user_info")
+      .option(TBL_NAME.key(), "order_info")
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "id")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "operate_time")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "etl_date")
